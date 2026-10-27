@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="th" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แผนที่ประเทศไทยปฏิสัมพันธ์ & ข้อมูลภูมิภาค (Thailand Interactive Map)</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        thai: {
+                            gold: '#D4AF37',
+                            red: '#EF4444',
+                            blue: '#1E40AF',
+                            navy: '#0F172A'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Leaflet CSS & JS for 2D Interactive Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <!-- Three.js for 3D Globe Visualizer Mode -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Google Fonts: Prompt & Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Prompt', 'Inter', sans-serif;
+        }
+        #leafletMap, #threeCanvasContainer {
+            width: 100%;
+            height: 100%;
+            min-height: 500px;
+            border-radius: 1rem;
+        }
+        .custom-popup .leaflet-popup-content-wrapper {
+            border-radius: 0.75rem;
+            padding: 4px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15);
+        }
+        .region-card {
+            transition: all 0.25s ease;
+        }
+        .region-card:hover {
+            transform: translateY(-3px);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #475569;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col antialiased">
+
+    <!-- Header / Navbar -->
+    <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+            
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 via-rose-600 to-amber-500 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+                    <i class="fa-solid fa-map-location-dot text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-tight text-slate-900 dark:text-white">แผนที่ประเทศไทยเชิงปฏิสัมพันธ์</h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">สำรวจ 77 จังหวัด, 6 ภูมิภาค และสถานที่สำคัญ</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <!-- Toggle View Mode (2D Map vs 3D Globe) -->
+                <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-xl flex items-center text-xs font-semibold">
+                    <button id="btnView2D" class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm transition-all">
+                        <i class="fa-solid fa-map mr-1"></i> แผนที่ 2D
+                    </button>
+                    <button id="btnView3D" class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all">
+                        <i class="fa-solid fa-globe mr-1"></i> โมเดล 3D
+                    </button>
+                </div>
+
+                <!-- Theme Switcher -->
+                <button id="btnThemeToggle" title="เปลี่ยนธีม" class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 transition-colors">
+                    <i class="fa-solid fa-moon dark:hidden text-sm"></i>
+                    <i class="fa-solid fa-sun hidden dark:block text-sm text-amber-400"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-grow w-full space-y-6">
+
+        <!-- Country Overview KPI Stats Bar -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">เนื้อที่ทั้งหมด</p>
+                <h3 class="text-xl font-bold text-slate-900 dark:text-white mt-1">513,120 <span class="text-xs font-normal text-slate-400">ตร.กม.</span></h3>
+                <span class="text-[11px] text-emerald-600 dark:text-emerald-400"><i class="fa-solid fa-earth-asia"></i> อันดับที่ 50 ของโลก</span>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">ประชากรโดยประมาณ</p>
+                <h3 class="text-xl font-bold text-slate-900 dark:text-white mt-1">66.05 <span class="text-xs font-normal text-slate-400">ล้านคน</span></h3>
+                <span class="text-[11px] text-blue-600 dark:text-blue-400"><i class="fa-solid fa-users"></i> อันดับที่ 20 ของโลก</span>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">การปกครอง</p>
+                <h3 class="text-xl font-bold text-slate-900 dark:text-white mt-1">77 <span class="text-xs font-normal text-slate-400">จังหวัด</span></h3>
+                <span class="text-[11px] text-amber-600 dark:text-amber-400"><i class="fa-solid fa-building-columns"></i> 76 จังหวัด + 1 ปกครองพิเศษ</span>
+            </div>
+            <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">ภูมิภาคทางการ</p>
+                <h3 class="text-xl font-bold text-slate-900 dark:text-white mt-1">6 <span class="text-xs font-normal text-slate-400">ภาค</span></h3>
+                <span class="text-[11px] text-purple-600 dark:text-purple-400"><i class="fa-solid fa-layer-group"></i> แบ่งตามราชบัณฑิตยสภา</span>
+            </div>
+        </div>
+
+        <!-- Filter Controls Panel -->
+        <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+            
+            <!-- Region Filter Tabs -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none" id="regionFilters">
+                <button data-region="ALL" class="btn-filter px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 text-white shadow-sm shrink-0">
+                    ทั้งหมด
+                </button>
+                <button data-region="North" class="btn-filter px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 shrink-0">
+                    ภาคเหนือ
+                </button>
+                <button data-region="NE" class="btn-filter px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 shrink-0">
+                    ภาคอีสาน
+                </button>
+                <button data-region="Central" class="btn-filter px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 shrink-0">
+                    ภาคกลาง
+                </button>
+                <button data-region="East" class="btn-filter px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 shrink-0">
+                    ภาคตะวันออก
+                </button>
+                <button data-region="West" class="btn-filter px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 shrink-0">
+                    ภาคตะวันตก
+                </button>
+                <button data-region="South" class="btn-filter px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 shrink-0">
+                    ภาคใต้
+                </button>
+            </div>
+
+            <!-- Search Bar & Layer Controls -->
+            <div class="flex items-center gap-3">
+                <div class="relative w-full md:w-64">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="ค้นหาจังหวัด หรือ หมุดสำคัญ..." class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-9 pr-4 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button id="btnResetView" title="รีเซ็ตมุมมองแผนที่" class="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-600 dark:text-slate-300 text-xs font-medium shrink-0">
+                    <i class="fa-solid fa-location-crosshairs"></i> รีเซ็ต
+                </button>
+            </div>
+        </div>
+
+        <!-- Map & Landmark Info Split View Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Map Container Area (2 Cols on Desktop) -->
+            <div class="lg:col-span-2 bg-white dark:bg-slate-800 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm relative flex flex-col h-[560px]">
+                
+                <!-- 2D Leaflet Map Canvas -->
+                <div id="leafletMap" class="z-10"></div>
+
+                <!-- 3D Three.js Globe Container (Initially Hidden) -->
+                <div id="threeCanvasContainer" class="hidden absolute inset-3 z-20 bg-slate-950 rounded-xl overflow-hidden">
+                    <div class="absolute top-4 left-4 z-30 bg-slate-900/80 backdrop-blur-md text-white px-3 py-2 rounded-xl text-xs border border-slate-700">
+                        <i class="fa-solid fa-circle-info text-amber-400 mr-1"></i> คลิกและลากเพื่อหมุนลูกโลก 3D
+                    </div>
+                </div>
+
+                <!-- Floating Map Controls -->
+                <div class="absolute bottom-6 right-6 z-20 flex flex-col gap-2">
+                    <button id="btnZoomIn" class="w-9 h-9 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-md border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-700">
+                        <i class="fa-solid fa-plus text-xs"></i>
+                    </button>
+                    <button id="btnZoomOut" class="w-9 h-9 rounded-xl bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-md border border-slate-200 dark:border-slate-700 flex items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-700">
+                        <i class="fa-solid fa-minus text-xs"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Details Sidebar (1 Col) -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-5 flex flex-col justify-between h-[560px]">
+                <div>
+                    <!-- Sidebar Header -->
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
+                        <div>
+                            <span id="detailBadge" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                เลือกพื้นที่
+                            </span>
+                            <h2 id="detailTitle" class="text-xl font-bold text-slate-900 dark:text-white mt-1">ประเทศไทย (Thailand)</h2>
+                        </div>
+                        <div id="detailIcon" class="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-xl text-blue-600 dark:text-blue-400">
+                            <i class="fa-solid fa-flag"></i>
+                        </div>
+                    </div>
+
+                    <!-- Selected Location Info Content -->
+                    <div id="detailBody" class="mt-4 space-y-4 text-xs leading-relaxed text-slate-600 dark:text-slate-300 overflow-y-auto max-h-[340px] pr-1">
+                        <p>
+                            กรุณาคลิกเลือกหมุดสถานที่ หรือเลือกภูมิภาคจากตัวกรองด้านบน เพื่อดูข้อมูลเชิงลึก พิกัด ประวัติ และจุดเด่นของแต่ละพื้นที่
+                        </p>
+                        
+                        <div class="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl space-y-2 border border-slate-100 dark:border-slate-800">
+                            <h4 class="font-bold text-slate-800 dark:text-slate-200 text-xs">เกร็ดน่ารู้เกี่ยวกับภูมิภาค:</h4>
+                            <ul class="list-disc list-inside space-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
+                                <li><strong>ภาคเหนือ:</strong> ภูมิประเทศเป็นเทือกเขาสลับซับซ้อน มียอดเขาดอยอินทนนท์สูงที่สุด</li>
+                                <li><strong>ภาคอีสาน:</strong> เป็นแปลงที่ราบสูงขนาดใหญ่ (โคราช) มีแม่น้ำโขงเป็นกั้นพรมแดน</li>
+                                <li><strong>ภาคกลาง:</strong> ที่ราบลุ่มแม่น้ำเจ้าพระยา แหล่งปลูกข้าวและศูนย์กลางเศรษฐกิจ</li>
+                                <li><strong>ภาคใต้:</strong> คาบสมุทรขนาบด้วยทะเลอ่าวไทยและอันดามัน มีชายหาดระดับโลก</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Action Button inside detail card -->
+                <div class="pt-4 border-t border-slate-100 dark:border-slate-700">
+                    <button id="btnFocusLocation" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold shadow-md transition-colors flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-location-arrow"></i> ซูมไปยังพิกัดนี้
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 6 Regions Quick Card Explorer -->
+        <div>
+            <h3 class="font-bold text-slate-900 dark:text-white text-base mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-map-pin text-rose-500"></i> สำรวจ 6 ภูมิภาคของไทย
+            </h3>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4" id="regionCardsGrid">
+                <!-- Region Cards populate dynamically -->
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 dark:text-slate-400 space-y-1">
+            <p>© 2026 Thailand Interactive Map & Geographic Portal. All rights reserved.</p>
+            <p class="text-[11px] text-slate-400 dark:text-slate-500">พัฒนาด้วย Leaflet.js, Three.js & Tailwind CSS</p>
+        </div>
+    </footer>
+
+    <!-- Main Application Script -->
+    <script>
+        // --- Data Definitions ---
+        const REGIONS_DATA = {
+            North: {
+                name: 'ภาคเหนือ',
+                enName: 'Northern Thailand',
+                color: '#3B82F6',
+                provincesCount: 9,
+                center: [18.7883, 98.9853],
+                zoom: 8,
+                desc: 'ภูมิประเทศส่วนใหญ่เป็นเทือกเขาสลับซับซ้อน อากาศเย็นสบายในฤดูหนาว มีวัฒนธรรมล้านนาอันเป็นเอกลักษณ์ ยอดเขาสูงสุดคือ ดอยอินทนนท์ (2,565 เมตร)',
+                icon: 'fa-mountain'
+            },
+            NE: {
+                name: 'ภาคตะวันออกเฉียงเหนือ (อีสาน)',
+                enName: 'Northeastern Thailand',
+                color: '#EF4444',
+                provincesCount: 20,
+                center: [16.4419, 102.8360],
+                zoom: 7,
+                desc: 'พื้นที่ที่ราบสูงขนาดใหญ่ที่สุดในไทย อุดมไปด้วยอารยธรรมโบราณ ศิลปวัฒนธรรมประเพณีเฉพาะตัว และอาหารรสจัดจ้าน',
+                icon: 'fa-sun'
+            },
+            Central: {
+                name: 'ภาคกลาง',
+                enName: 'Central Thailand',
+                color: '#10B981',
+                provincesCount: 22,
+                center: [13.7563, 100.5018],
+                zoom: 8,
+                desc: 'อู่ข้าวอู่น้ำของประเทศ เป็นที่ราบลุ่มแม่น้ำเจ้าพระยา ศูนย์กลางการปกครอง เศรษฐกิจ การพาณิชย์ และประวัติศาสตร์',
+                icon: 'fa-city'
+            },
+            East: {
+                name: 'ภาคตะวันออก',
+                enName: 'Eastern Thailand',
+                color: '#F59E0B',
+                provincesCount: 7,
+                center: [13.3611, 100.9847],
+                zoom: 8,
+                desc: 'ศูนย์กลางอุตสาหกรรม การขนส่งทางเรือ (EEC) และแหล่งท่องเที่ยวชายหาดเกาะแก่งชื่อดัง เช่น พัทยา เกาะเสม็ด เกาะช้าง',
+                icon: 'fa-anchor'
+            },
+            West: {
+                name: 'ภาคตะวันตก',
+                enName: 'Western Thailand',
+                color: '#8B5CF6',
+                provincesCount: 5,
+                center: [14.0227, 99.5328],
+                zoom: 8,
+                desc: 'พื้นที่ชายแดนติดเมียนมา มีป่าไม้ เขื่อนขนาดใหญ่ น้ำตก และสะพานข้ามแม่น้ำแควที่มีประวัติศาสตร์สำคัญระดับโลก',
+                icon: 'fa-tree'
+            },
+            South: {
+                name: 'ภาคใต้',
+                enName: 'Southern Thailand',
+                color: '#06B6D4',
+                provincesCount: 14,
+                center: [8.4304, 99.9631],
+                zoom: 7,
+                desc: 'ขนาบข้างด้วยทะเลอ่าวไทยและทะเลอันดามัน โดดเด่นด้วยหมู่เกาะที่สวยงามระดับโลก อาหารรสเผ็ดร้อน และวัฒนธรรมพหุวัฒนธรรม',
+                icon: 'fa-umbrella-beach'
+            }
+        };
+
+        const LANDMARKS_DATA = [
+            {
+                id: 'bkk',
+                name: 'วัดพระศรีรัตนศาสดาราม (วัดพระแก้ว)',
+                province: 'กรุงเทพมหานคร',
+                region: 'Central',
+                lat: 13.7516,
+                lng: 100.4927,
+                category: 'สถานที่สำคัญทางประวัติศาสตร์',
+                desc: 'วัดคู่บ้านคู่เมืองของไทย ตั้งอยู่ในพระบรมมหาราชวัง เป็นที่ประดิษฐานพระพุทธมหามณีรัตนปฏิมากร (พระแก้วมรกต)',
+                icon: 'fa-gopuram'
+            },
+            {
+                id: 'inthanon',
+                name: 'ดอยอินทนนท์',
+                province: 'เชียงใหม่',
+                region: 'North',
+                lat: 18.5888,
+                lng: 98.4870,
+                category: 'ธรรมชาติ / ภูเขา',
+                desc: 'ยอดเขาที่สูงที่สุดในประเทศไทย ความสูง 2,565 เมตรจากระดับน้ำทะเลปานกลาง มีอากาศหนาวเย็นตลอดทั้งปี',
+                icon: 'fa-mountain'
+            },
+            {
+                id: 'phanomrung',
+                name: 'ปราสาทหินพนมรุ้ง',
+                province: 'บุรีรัมย์',
+                region: 'NE',
+                lat: 14.5322,
+                lng: 102.9419,
+                category: 'โบราณสถาน',
+                desc: 'โบราณสถานขอมโบราณตั้งอยู่บนยอดภูเขาไฟที่ดับแล้ว มีปรากฏการณ์พระอาทิตย์ขึ้นลอด 15 ช่องประตูปีละ 4 ครั้ง',
+                icon: 'fa-monument'
+            },
+            {
+                id: 'phi_phi',
+                name: 'หมู่เกาะพีพี & มาหยา',
+                province: 'กระบี่',
+                region: 'South',
+                lat: 7.6782,
+                lng: 98.7659,
+                category: 'เกาะ / ทะเลอันดามัน',
+                desc: 'อุทยานแห่งชาติหาดนพรัตน์ธารา-หมู่เกาะพีพี มีชื่อเสียงระดับโลกด้วยน้ำทะเลสีมรกตและภูเขาหินปูนสูงชัน',
+                icon: 'fa-water'
+            },
+            {
+                id: 'river_kwai',
+                name: 'สะพานข้ามแม่น้ำแคว',
+                province: 'กาญจนบุรี',
+                region: 'West',
+                lat: 14.0409,
+                lng: 99.5037,
+                category: 'ประวัติศาสตร์โลก',
+                desc: 'สะพานทางรถไฟสายมรณะที่สร้างขึ้นในสมัยสงครามโลกครั้งที่ 2 เป็นอนุสรณ์สถานทางประวัติศาสตร์ที่สำคัญ',
+                icon: 'fa-bridge'
+            },
+            {
+                id: 'pattaya',
+                name: 'เมืองพัทยา & แหลมบาลีฮาย',
+                province: 'ชลบุรี',
+                region: 'East',
+                lat: 12.9236,
+                lng: 100.8825,
+                category: 'เมืองท่องเที่ยวชายทะเล',
+                desc: 'เมืองท่องเที่ยวตากอากาศระดับนานาชาติ ศูนย์กลางความบันเทิงและกีฬาทางน้ำริมอ่าวไทย',
+                icon: 'fa-city'
+            }
+        ];
+
+        // --- Application State ---
+        let map;
+        let markersGroup;
+        let currentSelectedRegion = 'ALL';
+        let currentFocusedCoords = [13.7367, 100.5231];
+        let threeScene, threeCamera, threeRenderer, globeMesh;
+
+        // --- DOM Elements ---
+        const btnThemeToggle = document.getElementById('btnThemeToggle');
+        const btnView2D = document.getElementById('btnView2D');
+        const btnView3D = document.getElementById('btnView3D');
+        const leafletMapEl = document.getElementById('leafletMap');
+        const threeCanvasContainer = document.getElementById('threeCanvasContainer');
+        const searchInput = document.getElementById('searchInput');
+        const btnResetView = document.getElementById('btnResetView');
+        const btnZoomIn = document.getElementById('btnZoomIn');
+        const btnZoomOut = document.getElementById('btnZoomOut');
+        const btnFocusLocation = document.getElementById('btnFocusLocation');
+
+        // --- Initializer ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initLeafletMap();
+            initThreeGlobe();
+            renderRegionCards();
+            setupEventListeners();
+        });
+
+        // --- Initialize 2D Leaflet Map ---
+        function initLeafletMap() {
+            // Center Thailand Coordinates
+            map = L.map('leafletMap', {
+                zoomControl: false
+            }).setView([13.7367, 100.5231], 6);
+
+            // Tile Layer (OpenStreetMap)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            }).addTo(map);
+
+            markersGroup = L.layerGroup().addTo(map);
+
+            // Render Landmarks Markers
+            renderMarkers('ALL');
+        }
+
+        // --- Render Landmark Markers on Map ---
+        function renderMarkers(regionFilter, searchKeyword = '') {
+            markersGroup.clearLayers();
+
+            LANDMARKS_DATA.forEach(item => {
+                const matchRegion = regionFilter === 'ALL' || item.region === regionFilter;
+                const matchSearch = searchKeyword === '' || 
+                    item.name.toLowerCase().includes(searchKeyword.toLowerCase()) ||
+                    item.province.toLowerCase().includes(searchKeyword.toLowerCase());
+
+                if (matchRegion && matchSearch) {
+                    // Marker Custom Icon
+                    const customIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: `<div class="w-8 h-8 rounded-full bg-rose-600 border-2 border-white text-white flex items-center justify-center shadow-lg transform transition-transform hover:scale-110">
+                                <i class="fa-solid ${item.icon} text-xs"></i>
+                              </div>`,
+                        iconSize: [32, 32],
+                        iconAnchor: [16, 16]
+                    });
+
+                    const marker = L.marker([item.lat, item.lng], { icon: customIcon });
+                    
+                    marker.bindPopup(`
+                        <div class="p-1 max-w-[200px] text-xs font-sans">
+                            <span class="text-[10px] text-blue-600 font-semibold uppercase">${item.province}</span>
+                            <h4 class="font-bold text-slate-800 text-sm mt-0.5">${item.name}</h4>
+                            <p class="text-slate-500 mt-1 line-clamp-2 text-[11px]">${item.desc}</p>
+                        </div>
+                    `, { className: 'custom-popup' });
+
+                    marker.on('click', () => {
+                        showDetailCard(item.name, item.category, item.desc, item.province, item.icon, [item.lat, item.lng]);
+                    });
+
+                    markersGroup.addLayer(marker);
+                }
+            });
+        }
+
+        // --- Display Detail Sidebar Data ---
+        function showDetailCard(title, category, desc, province, iconClass, coords) {
+            document.getElementById('detailTitle').textContent = title;
+            document.getElementById('detailBadge').textContent = category;
+            document.getElementById('detailIcon').innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+            
+            document.getElementById('detailBody').innerHTML = `
+                <div class="space-y-3">
+                    <div class="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-medium">
+                        <i class="fa-solid fa-location-dot"></i>
+                        <span>จังหวัด: ${province}</span>
+                    </div>
+                    <p class="text-slate-600 dark:text-slate-300">${desc}</p>
+                    <div class="p-3 bg-slate-100 dark:bg-slate-900 rounded-xl font-mono text-[11px] text-slate-500">
+                        <i class="fa-solid fa-compass mr-1"></i> พิกัด: ${coords[0].toFixed(4)}, ${coords[1].toFixed(4)}
+                    </div>
+                </div>
+            `;
+
+            currentFocusedCoords = coords;
+        }
+
+        // --- Render 6 Region Cards ---
+        function renderRegionCards() {
+            const grid = document.getElementById('regionCardsGrid');
+            grid.innerHTML = '';
+
+            Object.entries(REGIONS_DATA).forEach(([key, reg]) => {
+                grid.innerHTML += `
+                    <div class="region-card bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer" onclick="selectRegion('${key}')">
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center text-lg">
+                                <i class="fa-solid ${reg.icon}"></i>
+                            </div>
+                            <span class="text-xs font-bold text-slate-400 dark:text-slate-500">${reg.provincesCount} จังหวัด</span>
+                        </div>
+                        <h4 class="font-bold text-slate-900 dark:text-white text-sm">${reg.name}</h4>
+                        <p class="text-[11px] text-slate-400 dark:text-slate-500 mb-2">${reg.enName}</p>
+                        <p class="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">${reg.desc}</p>
+                    </div>
+                `;
+            });
+        }
+
+        // --- Select & Focus Region ---
+        function selectRegion(regionKey) {
+            currentSelectedRegion = regionKey;
+
+            // Highlight Active Filter Button
+            document.querySelectorAll('.btn-filter').forEach(btn => {
+                if (btn.dataset.region === regionKey) {
+                    btn.className = 'btn-filter px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-blue-600 text-white shadow-sm shrink-0';
+                } else {
+                    btn.className = 'btn-filter px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 shrink-0';
+                }
+            });
+
+            if (regionKey === 'ALL') {
+                map.flyTo([13.7367, 100.5231], 6);
+                showDetailCard('ประเทศไทย (Thailand)', 'ภาพรวมประเทศ', 'เลือกหมุดสถานที่หรือภูมิภาคเพื่อดูข้อมูลเชิงลึก', 'ทั่วประเทศ', 'fa-flag', [13.7367, 100.5231]);
+            } else {
+                const reg = REGIONS_DATA[regionKey];
+                map.flyTo(reg.center, reg.zoom);
+                showDetailCard(reg.name, reg.enName, reg.desc, `${reg.provincesCount} จังหวัด`, reg.icon, reg.center);
+            }
+
+            renderMarkers(regionKey, searchInput.value.trim());
+        }
+
+        // --- Event Listeners Setup ---
+        function setupEventListeners() {
+            // Theme Switcher
+            btnThemeToggle.addEventListener('click', () => {
+                document.documentElement.classList.toggle('dark');
+            });
+
+            // 2D vs 3D View Switcher
+            btnView2D.addEventListener('click', () => {
+                btnView2D.className = 'px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm transition-all';
+                btnView3D.className = 'px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all';
+                leafletMapEl.classList.remove('hidden');
+                threeCanvasContainer.classList.add('hidden');
+            });
+
+            btnView3D.addEventListener('click', () => {
+                btnView3D.className = 'px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm transition-all';
+                btnView2D.className = 'px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all';
+                leafletMapEl.classList.add('hidden');
+                threeCanvasContainer.classList.remove('hidden');
+            });
+
+            // Filter Buttons Click
+            document.getElementById('regionFilters').addEventListener('click', (e) => {
+                const btn = e.target.closest('.btn-filter');
+                if (btn) {
+                    selectRegion(btn.dataset.region);
+                }
+            });
+
+            // Search Input
+            searchInput.addEventListener('input', (e) => {
+                renderMarkers(currentSelectedRegion, e.target.value.trim());
+            });
+
+            // Map Zoom Controls
+            btnZoomIn.addEventListener('click', () => map.zoomIn());
+            btnZoomOut.addEventListener('click', () => map.zoomOut());
+
+            // Reset Map View
+            btnResetView.addEventListener('click', () => {
+                selectRegion('ALL');
+                searchInput.value = '';
+            });
+
+            // Focus Location Button in Detail Card
+            btnFocusLocation.addEventListener('click', () => {
+                map.flyTo(currentFocusedCoords, 11);
+            });
+        }
+
+        // --- Three.js 3D Globe Implementation ---
+        function initThreeGlobe() {
+            const container = threeCanvasContainer;
+            const width = container.clientWidth || 600;
+            const height = container.clientHeight || 500;
+
+            // Scene
+            threeScene = new THREE.Scene();
+
+            // Camera
+            threeCamera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+            threeCamera.position.z = 250;
+
+            // Renderer
+            threeRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            threeRenderer.setSize(width, height);
+            container.appendChild(threeRenderer.domElement);
+
+            // Sphere (Globe)
+            const geometry = new THREE.SphereGeometry(70, 64, 64);
+            const material = new THREE.MeshPhongMaterial({
+                color: 0x1d4ed8,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.6
+            });
+            globeMesh = new THREE.Mesh(geometry, material);
+            threeScene.add(globeMesh);
+
+            // Add Thailand Glowing Pointer Dot on 3D Globe
+            const dotGeo = new THREE.SphereGeometry(3, 16, 16);
+            const dotMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+            const dotMesh = new THREE.Mesh(dotGeo, dotMat);
+            // Approximate pos for SE Asia / Thailand on Globe
+            dotMesh.position.set(40, 20, 50);
+            globeMesh.add(dotMesh);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            threeScene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(100, 100, 100);
+            threeScene.add(dirLight);
+
+            // Mouse Drag Interaction Variables
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+
+            container.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            container.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+
+                const deltaMove = {
+                    x: e.clientX - previousMousePosition.x,
+                    y: e.clientY - previousMousePosition.y
+                };
+
+                globeMesh.rotation.y += deltaMove.x * 0.005;
+                globeMesh.rotation.x += deltaMove.y * 0.005;
+
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            window.addEventListener('mouseup', () => { isDragging = false; });
+
+            // Animation Loop
+            function animate() {
+                requestAnimationFrame(animate);
+                if (!isDragging) {
+                    globeMesh.rotation.y += 0.002;
+                }
+                threeRenderer.render(threeScene, threeCamera);
+            }
+
+            animate();
+        }
+    </script>
+</body>
+</html>
